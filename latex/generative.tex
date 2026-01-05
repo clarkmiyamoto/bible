@@ -1,0 +1,283 @@
+The problem setup for generative models is as follows
+\begin{itemize}
+	\item You only have access to samples $\mathcal D = \{x_i\}_i$, which are realizations $x_i \sim_{iid} \pi$ of some target distribution. Often $x_i$ is a high dimensional object.
+	\item You want to construct $p_\theta \approx \pi$. 
+\end{itemize}
+
+
+
+\section{(Variational) Autoencoders}
+Consider a machine learning model with a bottleneck. That is your model is the function
+\begin{align}
+	f_\theta : \mathbb R^d \to \mathbb R^d, \text{ s.t. } f_\theta(x) = \phi_\theta(\psi_\theta(x))\\
+	\text{where } \psi_\theta : \mathbb R^d \to \mathbb R^n , \ \phi_\theta : \mathbb R^n \to \mathbb R^d, \ n < d
+\end{align}
+If you construct a loss function like
+\begin{align}
+	\mathcal L(\theta) = \mathbb E_{x \sim p_{data}} [\| x - f_\theta(x)\|^2]
+\end{align}
+you're kinda forcing the model to learn a low dimensional representation of the data. This is called an \textbf{autoencoder}. Often times asking for a deterministic reconstruction is too difficult? What if we ask for a reconstruction in distribution? That is $p_\theta \equiv \text{Law}(f_\theta(x)) \approx \pi$... This is called a \textbf{variational autoencoder}.
+
+One method to achieve this is by performing gradient descent on distance metrics between probability distributions. One such is the KL divergence. 
+\begin{align}
+	\KL{p}{\pi} \equiv \mathbb E_{x \sim p} \left[ \log \frac{p(x)}{\pi(x)} \right]
+\end{align}
+Note, KL is not symmetric $\KL{p_\theta}{\pi} \neq \KL{\pi}{p_\theta}$, so it's worth considering which one to make first. The question I ask myself, is it easier to sample $p_\theta$ or $\pi$? In the case of generative models, $\pi$ is a empirical distribution (i.e. a bunch of photos of cat), so it's easy to sample that.
+\begin{align}
+	\KL{\pi}{p_\theta} & \equiv \mathbb E_{x \sim \pi} \left[ \log \frac{\pi(x)}{p_\theta(x)} \right]\\
+	\nabla_\theta \KL{\pi}{p_\theta} & = \mathbb E_{x \sim \pi} \left[ -\frac{p_\theta(x)}{\pi(x)} \frac{\pi(x)}{p_\theta(x)^2} \nabla_\theta p_\theta(x)  \right]\\
+	& = - \mathbb E_{x \sim p_{data}} \left[ \nabla_\theta \log p_\theta(x) \right]
+\end{align}
+
+
+\newpage
+\section{Denoising Diffusion Probabilistic Models (DDPM)}
+In DDPM your neural network attempts to learn how to add white-noise to the data (iteratively). We can mathematically state this as
+\begin{align}
+	x_t = \sqrt{\alpha_t} x_{t-1} + \sqrt{1- \alpha_t} z_t
+\end{align}
+where $x_0 \sim p_{data}$ and $z_t \sim^{iid} \mathcal N(0, \mathbb I)$. However, when evaluating this, we don't have to go recursively
+\begin{align}
+	x_t & = \sqrt{\alpha_t} (\sqrt{\alpha_{t-1}} x_{t-2} + \sqrt{1 - \alpha_{t-2}} z_{t-1} ) + \sqrt{1 - \alpha_t} z_t\\
+	& = \sqrt{\alpha_t \alpha_{t-1}} x_{t-2} + \sqrt{1 - \alpha_{t}\alpha_{t-1}} z_{t-1}\\
+	& = \sqrt{\prod_{i=1}^t \alpha_i} \, x_0 + \sqrt{1 - \prod_{i=1}^t \alpha_i} \, z_0\\
+	& \sim \mathcal N(x_t; \sqrt{\bar \alpha_t} x_0, (1 - \bar \alpha_t) \mathbb I ) & \text{where } \bar \alpha_t \equiv \prod_{i=1}^t \alpha_i 
+\end{align}
+where we've used the fact that the sum of two iid Gaussians is still a Gaussian.
+
+
+\newpage
+\section{Score Based Diffusion (SBD)}
+In score based diffusion, you learn the score function
+\begin{align*}
+	s(x; t) = \nabla_x \log p_t(x) 
+\end{align*}
+Intuitively, the score says which direction will yields samples of high probability, so this has to be an important quantity in generative modeling.
+
+\begin{sidework}
+	This quantity also has some nice properties. For example, it no longer is concerned about normalization. For example, consider an exponential family distribution 
+\begin{align*}
+	\pi(x) = e^{- U(x)} / Z \implies \nabla_x \log \pi(x) = - \nabla_x U(x)
+\end{align*}
+	The score is not dependent on the normalization $Z$.
+\end{sidework}
+The trade off is that now we must figure out ways to sample when only having access to gradient information (not log probability).
+
+In DDPM, we iteratively noised the 
+
+
+\subsubsection{Learning (Score Matching)}
+When learning distributions, we use a KL divergence as the loss function
+\begin{align}
+	D_{KL}(q \| p) \equiv \mathbb E_{x \sim q}  \left[\log q - \log p \right]
+\end{align}
+However since we're learning the score $s_\theta(x ;t) \approx \nabla_x \log p_t(x)$, we can use the Fisher Divergence
+\begin{align}
+	D_{F} (p \| q_\theta) \equiv \mathbb E_{x \sim p} [(\nabla_x \log p(x) - \nabla_x \log q_\theta(x))^2]
+\end{align}
+Similarly to the KL divergence, $D_F \geq 0$ and $D_F = 0$ if and only if $p = q_\theta$. Since we're using this as loss function, let's inspect the gradient w.r.t. the model parameters $\theta$.
+\begin{align}
+	\nabla_\theta D_F(p \| q_\theta) & = \nabla_\theta \mathbb E_{x \sim p} [(\nabla_x \log p(x) - \nabla_x \log q_\theta(x))^2]\\
+	& = \nabla_\theta \mathbb E_{x \sim p} [(\nabla_x \log p(x))^2 + (\nabla_x \log q_\theta(x))^2 - 2 \nabla_x \log p(x) \cdot \nabla_x \log q_\theta(x)]\\
+	& = \nabla_\theta \mathbb E_{x \sim p}[ (\nabla_x \log q_\theta(x))^2 - 2 \nabla_x \log p(x) \cdot \nabla_x \log q_\theta(x)]\\
+	& = \nabla_\theta \mathbb E_{x \sim p}[(\nabla_x \log q_\theta(x))^2 + 2 \, \nabla_x \cdot \nabla_x \log q_\theta(x)]
+\end{align}
+Using the notation $s_\theta(x) = \log q_\theta(x)$, we arrive at the \textbf{score matching (SM) objective}
+\begin{align}
+	\mathcal L_{\text{SM}}(\theta) = \mathbb E_{x \sim p} [s_\theta(x)^2 + 2 \nabla_x \cdot s_\theta(x)] + \text{Constants}
+\end{align}
+Remember in practice this is done for various levels of noise $p_t$, so you'll use
+\begin{align}
+	\boxed{\mathcal L_{\text{SM}}(\theta) = \mathbb E_{t \sim [0,T]} \mathbb E_{x \sim p_t} [s_\theta(x; t)^2 + 2 \nabla_x \cdot s_\theta(x; t)]} + \text{Constants}
+\end{align}
+
+
+
+\subsubsection{Inference}
+Since you're learning the score, you can try overdamped Langevin dynamics.
+\begin{align}
+	dX_t = - \nabla_x \log p_{t=1}(x) \, dt + \sqrt{2} \, dW_t
+\end{align}
+However because the distribution your'e sampling is highly multimodal (or at least for images it seems to be), the mixing time would be incredibly slow. Another thing is that in SBD you've learned a path between $p_0$ and $p_{data}$ (given by $\nabla_x \log p_t$), so you should take advantage of that extra information.
+
+A natural solution is to reverse the SDE of your noising process. Say you noised the data using
+\begin{align}
+	dX_t = \mu(X_t, t) \, dt + \sigma(X_t, t) d W_t \iff \partial_t p = \partial_x(\mu \, p) + \frac{1}{2} \partial_{xx}(\sigma^2 \, p)
+\end{align}
+for times $t \in [0, T]$. The boundary condition is that you asserted $p_{t=0} = p_{data}$, where $\mu,\sigma$ are chosen s.t. $p_{t=T} = p_{prior}$ (which is hopefully something easy to sample). You can flow back in time $\tau = T-t \in [0, T]$ according the reverse Fokker Planck
+\begin{align}
+	\partial_{\tau} p_\tau & = - \partial_x (\mu\, p_\tau)  + \frac{1}{2} \partial_{xx}(\sigma^2 \, p_\tau) \\
+	\iff d\tilde X_{\tau} & = [-\mu(X_{\tau},\tau) + \sigma^2(X_{\tau},\tau) \nabla_x \log p_{\tau}(x)] \, d\tau + \sigma(X_{\tau}, \tau) \, dW_{\tau}
+\end{align}
+where you simulate with the time increments backwards $T, T-\epsilon, T - 2\epsilon, ..., 0$. The boundary conditions are now $p_{\tau = 0} = p_{prior}$, and hopefully this yields samples from $p_{\tau = T} = p_{data}$.
+
+
+\newpage
+\section{Flow Matching}
+\begin{definition}
+	[Flow Model]
+	A flow model is described by the ODE
+	\begin{align}
+		X_0 \sim p_{init}\\
+		\frac{d}{dt} X_t = u_t^\theta(X_t)
+	\end{align}
+	where $u_t^\theta : \mathbb R^d \times [0,1] \to \mathbb R^d $ is a vector field (constructed with a neural network w/ parameters $\theta$). We hope to construct $u_t^\theta$ s.t.
+	\begin{align}
+		X_1 \sim p_{data} \iff  \psi_1^\theta(X_0) = p_{data}
+	\end{align}
+	where $\psi^\theta_t$ is the induced flow due to the drift field $u^\theta_t$.
+\end{definition}
+In intermediate times, your transported samples $X_t \sim p_t$ will have some path in probability space $p_t$. In flow models, you specify the probability path $p_t$, and then derive the target drift field $u_t^{target}$ (this is your training objective, in the sense you'll optimize $\mathcal L(\theta) = \| u^\theta_t - u_t^{target} \|$). As a user, you have a lot of possible algorithms to choose from, while other algorithms (e.g. normalizing flows, DDPM)  ! An alternative method (Stochastic Interpolants) will specify the path at the level of the samples.
+
+\begin{definition}
+	[Probability Path]
+	Consider the \textbf{conditional probability path}, which is a family of distributions $\{p_t(\cdot  | z)\}_{0 \leq t \leq 1}$ such that
+	\begin{align}
+		p_0(x | z) = p_{init}(x), \ p_{1}(x | z) = \delta_z(x), \ \forall z \in \mathbb R^d
+	\end{align}
+	where $\delta_z$ is a Dirac delta distribution which returns $z$.
+	
+	A \textbf{marginal probability path} is a familiy of distributions $\{p_t(\cdot )\}_{0 \leq t \leq 1}$ such that
+	\begin{align}
+		p_t(x) = \int p_t(x | z) p_{data}(z) \, dz
+	\end{align}
+	Notice the conditions on the conditional probability path imply $p_0  = p_{init}$ and $p_1 = p_{data}$. 
+\end{definition}
+Every conditional probability path gives a marginal probability path which satisfies the objectives of the flow model. So if you have a probability distribution which has an easy to sample limit and a Dirac delta limit, it would make for a good candidate for a conditional probability path. An example would be a \emph{Gaussian probability path}, which is used by DDPMs.
+\begin{align}
+	p_t(\cdot |  z) = \mathcal N(\alpha_t z , \beta_t^2 \mathbb I) 
+\end{align}
+Where the boundary conditions $\alpha_0 = \beta_1 = 0$ and $\alpha_1 = \beta_0 = 1$, ensure that $p_1 = p_{data}$ and $p_0 = \mathcal N(0, \mathbb I)$. 
+
+
+
+
+
+\begin{theorem}
+	For every $z \in \mathbb R^d$, let $u^{target}_t(\cdot | z)$ denote  a conditional vector field, defined s.t. the corresponding ODE yields the conditional probability path $p_t(\cdot | z)$ 
+	\begin{align}
+		\frac{d}{dt} X_t = u^{target}_t(X_t | z).
+	\end{align}
+	The marginal vector field $u^{target}_t(x)$ is given by
+	\begin{align}
+		u_t^{target}(x) = \int u_t^{target}(x|z) \frac{p_t( x | z) p_{data} (z)}{p_t(x)}  \, dz,
+	\end{align}
+	follows the marginal probability path
+	\begin{align}
+		X_0 \sim p_{init}, \  \frac{d}{dt	} X_t = u_t^{target}(X_t)  \implies   X_t  \sim p_t , \ t \in [0,1]
+	\end{align}
+	In particular, $X_1 \sim p_{data}$ for this ODE. So we might say "$u^{target}$ converts $p_{init}$ to $p_{data}$".
+\end{theorem}
+
+\begin{proof}
+	Our objective is to find $u^{target}_t(X_t)$ as a function of the conditional drift $u_t^{target}(X_t | z)$. First, we can connect the distributions of two using marginalization
+	\begin{align}
+		p_t(x) & =  \int p_t(x | z) \, p_{data}(z) \, dz\\
+		\partial_t p_t(x) & = \int \partial_t p_t(x | z) \, p_{data}(z) \, dz\\
+		& = - \int (\nabla \cdot (u^{target}_t(x | z) \, p_t(x | z) ) \, p_{data}(z) \, dz & \text{Transport equation}\\
+		& = - \nabla \cdot \left( \left[\int u_t^{target}(x|z) \, \frac{p_t(x | z) p_{data}(z)}{p_t(x)} \, dz  \right]\, p_t(x)\right)
+	\end{align}
+	We can now read off the $u^{target}_t(x| z)$ from the new transport equation
+	\begin{align}
+		u^{target}_t(x) = \int u_t^{target}(x | z) \frac{p_t(x| z) p_{data}(z)}{p_t(x)}\, dz
+	\end{align}
+	You now use Fokker Planck (where the diffusion term is zero), to show the differential equation on the particles is given given by $dX_t = u^{target}_t(X_t) \, dt$. QED.
+\end{proof}
+
+
+
+\subsection{Training}
+Consider you want to generate samples via
+\begin{align}
+	dX_t = u^\theta_t(x ) \, dt
+\end{align}
+where $u^\theta$ is a neural network. We now want to figure out how to generate samples according to $u^{target}$, so you basically want  to find $\theta$ s.t. $u^\theta \approx u^{target}$. My naive idea is to just do
+\begin{align}
+	\mathcal L_{FM}(\theta) & = \mathbb E_{t \sim \text{Unif[0,1]}, x \sim p_t(x)}\| u^\theta_t(x) - u^{target}_t(x) \|_2^2\\
+	& = \mathbb E_{t \sim \text{Unif[0,1]}, z \sim p_{data}(z) , x \sim p_t(x | z)}
+\end{align}
+Plugging in the relationship between $u_t^{target}(x)$ and $u_t^{target}_t(x  | z)$ (because $u_t^{target}(x)$ requires evaluating $\int dz$ which is expensive).
+\begin{align}
+	\mathbb E \left[u_t^{target}(x) f(x) \right] & = \mathbb E_{t \sim \text{Unif}[0,1], x \sim p_t(x)} \left[ \int u_t^{target}(x | z) \frac{p_t(x| z) p_{data}(z)}{p_t(x)} f(x)\, dz    \right] \\
+	& = \mathbb E_{t \sim \text{Unif}[0,1]}\left[ \int u_t^{target}(x|z)  p_t(x | z) p_{data}(z) f(x) \, dz \, dx\right]\\
+	& = \mathbb E_{t \sim \text{Unif}[0,1], z \sim p_{data}(z), x \sim p_t(x|z)} \left[ u_t^{target}(x | z) f(x) \right]
+\end{align}
+We can see that the expectation over the marginal vector field is the same as the expectation over the conditional vector field. Since we're only interested in the gradient $\nabla_\theta \mathcal L(\theta)$, we don't have to worry about the $u_t^{target}(x)^2$ term. So we can use the loss function
+\begin{align}
+	\boxed{\mathcal L_{CFM}(\theta) = \mathbb E_{t \sim \text{Unif}[0,1], z \sim p_{data}(z) , x \sim p_t(x|z)}  \|u_t^\theta(x) - u_t^{target}(x | z) \|_2^2}
+\end{align}
+And you can find (using the fact above) that $\nabla_\theta \mathcal L_{CFM} = \nabla_\theta \mathcal L_{FM}$.
+
+
+
+\newpage
+\section{Stochastic Interpolants}
+
+\begin{definition}
+	[Stochastic Interpolant] A stochastic interpolant is a stochastic process $x_t$
+	\begin{align} \label{eqn:stochastic_interpolant_def}
+		x_t = I(t, x_0, x_1) + \gamma(t) z
+	\end{align}
+	with the following properties
+	\begin{itemize}
+		\item Boundary conditions of interpolant: $I(t=0, x_0, x_1) = x_0$ and $I(t=1, x_0, x_1) = x_1$.
+		\item Coupling of $x_0,x_1$: These are random variables s.t. $(x_0, x_1) \sim \nu(x_0, x_1)$. The coupling must be marginalize to the original distributions.
+		\begin{align}
+			\int \nu(x_0, x_1) \, dx_1 = p_0(x_0) & & \int \nu(x_0, x_1) \, dx_0 = p_1(x_1)
+		\end{align}
+		\item $z \sim \mathcal N(0, \mathbb I)$ is Gaussian noise, and it's independent to $x_0,x_1$. That is $z \perp x_0, x_1$.
+	\end{itemize}
+\end{definition}
+\begin{sidework}
+	To understand this notation, let's compute the mean and variance of $x_t$
+	\begin{align}
+		\mathbb E[x_t]  & = \mathbb E_{(x_0, x_1) \sim \nu} [I(t, x_0, x_1)]\\
+		\text{Cov}[x_t] & = \text{Cov}_{(x_0, x_1) \sim \nu}[I(t,x_0, x_1)] + \gamma^2(t) \mathbb I  
+	\end{align}
+\end{sidework}
+
+
+So instead of defining the "flow map" (which defines a transport at the level of the distribution) or relying on Langevin dynamics to define the measure transport, we can talk about the transport at the level of the samples.
+
+\begin{theorem}\label{thm:si_transport}
+	Consider the interpolant $x_t$ defined in (\ref{eqn:stochastic_interpolant_def}), it has $\text{Law}(x_t) = p(t,x)$ for times $t \in [0,1]$ s.t. $p(t=0,x) = p_0(x)$ and $p(t=1, x) = p_1(x)$. In addition it solves the transport equation
+	\begin{align}
+		\frac{\partial p}{\partial t} = \nabla \cdot (b \, p)
+	\end{align}
+	where $b(t,x) = \mathbb E[\dot x_t | x_t = x] = \mathbb E[\partial_t I(t,x_0,x_1) + \dot \gamma(t) z| x_t = x]$.
+\end{theorem}
+\begin{proof}
+	Consider the Fourier transform of the transport equation
+	\begin{align}
+		\partial_t \tilde p = (-ik) \cdot \tilde b \tilde p
+	\end{align}
+	All one needs to do is to calculate the time derivative of $\tilde p$ (Fourier transform of $p$), and you'l find the $\tilde b$.
+	\begin{align}
+		\tilde p & = \mathbb E_{x_t \sim p_t(x)}[e^{ik \cdot x_t}]\\
+		& = \mathbb E_{x_t \sim p_t} [\exp(ik \cdot I_t(x_0,x_1) + i \gamma(t) k \cdot z)] & \text{Definition}\\
+		& = \mathbb E[e^{ik \cdot I_t}]  e^{-\frac{1}{2}\gamma^2(t) |k|^2}
+	\end{align}
+	\begin{align}
+		\partial_t \tilde p	& = ik \, \mathbb E[\dot I_t e^{ik I_t}] e^{-\frac{1}{2} \gamma^2(t) |k|^2} -  \gamma(t) \dot \gamma(t) |k|^2 e^{-\frac{1}{2} \gamma^2(t) |k|^2}\\
+		& = (ik \, \mathbb E[\dot I_t e^{ik I_t}]  -  \gamma(t) \dot \gamma(t) |k|^2 	)e^{-\frac{1}{2} \gamma^2(t) |k|^2}
+	\end{align}
+\end{proof}
+
+\subsubsection{Learning}
+\subsubsection{Inference}
+In Theorem \ref{thm:si_transport}, we construct a transport equation which tells you how to construct a drift field $b$ s.t. the stochastic interpolant has $\text{Law}(x_t) = p(t,x)$. However solving a high dimensional PDE is difficult, we can instead using the Fokker Planck relationship to perform inference at the level of $x_t$.
+\begin{align}
+	
+\end{align}
+
+
+
+
+
+
+
+
+
+
+
+

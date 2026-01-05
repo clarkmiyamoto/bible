@@ -1,0 +1,11 @@
+In problems in scientific computing, you are tasked with generating samples $x \sim p(x)$. For example
+\begin{itemize}
+	\item In Bayesian inference, one has a forward model $p(x | \theta)$ of the observed data $x$ given some parameters $\theta$. By Bayes' rule, you can ask what's the probability of seeing these parameters \emph{given} the data.
+	\begin{align*}
+		p(\theta | x) = \frac{p(x | \theta) p(\theta)}{p(x)}
+	\end{align*}
+	In this context, querying $p(x|\theta)$ is computationally expensive, and the probability is usually unnormalized.
+	
+\end{itemize}
+
+\section{Importance Sampling}

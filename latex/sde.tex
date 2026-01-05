@@ -1,0 +1,129 @@
+\begin{definition}
+	Let $(\Omega, A, P)$ be a probability space and let $T \subset \mathbb R$ be time. A collection of random variables $X_t, t \in T$ with values in $\mathbb R$ is called a \textbf{stochastic process}.
+\end{definition}
+
+\begin{definition}
+	A stochastic process is called \textbf{measurable}, if $X: T \times \Omega \to S$ is measurable w.r.t. the sigma algebra the $\mathcal B(T) \times \mathcal A$
+\end{definition}
+
+
+\begin{definition}
+	[Ito Process] A stochastic process of the following form
+	\begin{align}
+		X_t = X_0 + \int_0^t \mu_s\, ds + \int_0^t B_s \, dW_s
+	\end{align} is called an \textbf{Ito process}. In particular it solves the SDE
+	\begin{align}
+		d X_t = \mu_t \, dt + B_t\,  dW_t
+	\end{align}
+\end{definition}
+
+\begin{theorem}
+	[Ito's Lemma]
+	Consider the process $dX_t = \mu(X_t, t) \, dt + \sigma(X_t, t) \, dW_t$. Consider a process related by a function $Y_t = f(X_t)$. Then
+	\begin{align}
+		dY_t = \left(\partial_t u(X_t, t)\, + \frac{1}{2} \partial_{xx} u(X_t, t) \, \sigma^2(X_t, t) \right) dt
+	\end{align}
+\end{theorem}
+
+
+\newpage
+\section{Fokker-Planck Equation}
+
+There are a couple forms of a stochastic differential equation. Here I'll assume $X_t$ solves Geometric Brownian Motion for illustration
+\begin{itemize}
+	\item Dynamics, an SDE describes how a particle at position $X_t$ should move under a noisy force $dW_t$.
+	\begin{align}
+		dX_t =  X_t(\mu \, dt + \sigma \, dW_t)
+	\end{align}
+	\item Random Variable, upon solving the SDE you can sample the solution at any point
+	\begin{align}
+		X_t = X_0  \exp \left((\mu \, - \frac{1}{2} \sigma^2) t + \sigma  Z_t \right)
+	\end{align}
+	where $Z_t \sim \mathcal N(0, \sqrt{t})$.
+	\item Distribution, any random variable has a probability distribution representation as well
+	\begin{align}
+		p_t(x) = \frac{1}{\sqrt{2\pi t }} \frac{1}{\sigma x} \exp \left( - \frac{[\log x -(\mu - \sigma^2/2) x]^2}{2 \sigma^2 t} \right)
+	\end{align}
+	where $\text{Law}(X_t) = p_t$.
+\end{itemize}
+Because you have a differential equation which describes the random variable, you should have a differential equation which describes the time evolution on the distribution $p_t(x)$. We'll describe this relationship here.
+
+\begin{theorem}[Fokker-Planck Equation]
+	Consider a stochastic process $X_t$
+	\begin{align}
+		dX_t = \mu(X_t, t) \, dt + \sigma(X_t, t) \, dW_t
+	\end{align}
+	where $\mu, \sigma$ are deterministic functions. The probability density $p_t = \text{Law}(X_t)$ satisfies the corresponding partial differential equation
+	\begin{align}
+		\frac{\partial p}{\partial t} = - \frac{\partial}{\partial x}(\mu(x,t) \, p) + \frac{1}{2} \frac{\partial^2}{\partial x^2} (\sigma^2(x,t)  \, p)
+	\end{align}
+\end{theorem}
+\begin{proof}
+	Consider the stochastic process $Y_t = f(X_t)$, where $f$ is a test function (for distributions). Using Ito's Lemma, we can find $dY_t$. Prior to that calculation, note that $dX_t^2 = \sigma^2 (X_t, t) \, dt + \mathcal O(dt^{3/2})$ 
+	\begin{align}
+		d f & = \partial_x  f(X_t)\, dX_t + \frac{1}{2} \partial_{xx} f(X_t) dX^2\\
+		& = \partial_x  f(X_t) (\mu(X_t, t) \, dt + \sigma(X_t, t) \, dW_t) + \frac{1}{2} \partial_{xx} f(X_t) \sigma^2 (X_t, t) \, dt \\
+		& = \Big(\partial_x f(X_t) \mu(X_t, t) + \frac{1}{2}\partial_{xx}f(X_t) \sigma^2 (X_t,t)  \Big) dt + \partial_x f(X_t) \sigma(X_t, t) dW_t
+	\end{align}
+	We can now compute $\mathbb E[df]$, note that $\mathbb E[dW_t] = 0$.
+	\begin{align}
+		\frac{d}{dt}\mathbb E[f] & = \mathbb E\left[\partial_x f(X_t) \mu(X_t, t) + \frac{1}{2} \partial_{xx} f(X_t) \sigma^2 (X_t, t) \right]\\
+		\int f(x)\, \frac{dp(x,t)}{dt} \, dx & = \int \left(\partial_x f(x) \mu(x, t) + \frac{1}{2} \partial_{xx} f(x) \sigma^2 (x, t)  \right) p(x,t) \, dx
+	\end{align}
+	Now if you can show something holds for all functions $f$, then you can extract an equation
+	\begin{align}
+		\int f(x) \frac{dp(x,t)}{dt} \, dt & = \int f(x)\left( -  \frac{\partial}{\partial x}(\mu(x,t) p(x,t) ) + \frac{1}{2} \frac{\partial^2}{\partial x^2} (\sigma^2(x,t) p(x,t)) \right) dx\\
+		\implies \frac{dp}{dt} & = - \frac{\partial}{\partial x} (\mu(x,t) \, p) + \frac{1}{2} \frac{\partial^2}{\partial x^2}(\sigma^2(x,t) \, p)
+	\end{align}
+	QED
+\end{proof}
+
+
+\subsection{Time Reversibility \& Backwards Equation}
+In the forwards equation, it was assume that you knew $\text{Law}(X_0) = p_0$. What if you have a situation in the opposite context, that is you only knew $\text{Law}(X_T) = p_T$? 
+\begin{theorem}
+	[Reverse Fokker-Planck Equation] Consider the parameterization $\tau = T - t$.
+\end{theorem}
+
+\section{Feynman-Kac}
+\subsection{Aside on Solving Path Integrals}
+
+\section{Change of Measure}
+\subsection{Radon-Nikodym Derivative}
+\begin{definition}
+	Consider a probability space $(\Omega, \mathcal F)$ and two measures $dP(\omega)$ and $dQ(\omega)$. We'll say the \textbf{Radon-Nikodym derivative} of $dP$ w.r.t. $dQ$ (denoted as $\frac{dP}{dQ}(\omega)$) if
+	\begin{align}
+		P(A) = \int_{\omega \in A} L(\omega) dQ(\omega)
+	\end{align}
+\end{definition}
+An equivalent definition is $L$ is the RN-derivative if for any test function $V$
+\begin{align}
+	\int V(\omega) dP(\omega) = \int V(\omega) L(\omega) dQ(\omega)
+\end{align}
+Ok this might look all that fancy, but this massively simplifies if the two probabilities have densities. Say the two measures have densities $dP(x) = p(x) \,dx$ and $dQ(x) = q(x) \, dx$. Checking the RN-derivative definition
+\begin{align}
+	\int V(x) p(x) dx & = \int V(x) L(x) q(x) dx \implies L(x) = \frac{p(x)}{q(x)}
+\end{align} 
+In this case, the Radon-Nikodym derivative is just the ratio of densities. Statisticians call this the "likelihood ratio", which is also why we gave it the $L$ notation.
+
+\subsection{Girsinov's Theorem}
+However this was just defined for random variables, how can we do a change of measure for stochastic processes?
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
